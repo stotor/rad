@@ -1,8 +1,8 @@
-CXX = g++
+CC = gcc
 
 CCFLAGS = -shared -fPIC -O3 -Wall
 
-SOURCES = create_radiograph.cpp
+SOURCES = create_radiograph.c
 
 create_radiograph.so : $(SOURCES)
 	$(CC) $(CCFLAGS) $(SOURCES) -o $@

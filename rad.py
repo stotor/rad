@@ -1,6 +1,8 @@
 import sys
 
 import numpy as np
+import ctypes
+import os
 import h5py
 from mpi4py import MPI
 
@@ -8,14 +10,22 @@ import osiris_interface as oi
 import pic_calculations as pic
 import utilities
 
+# Only for debugging
+import matplotlib.pyplot as plt
+
+filename = '/Users/stotor/Desktop/proton_radiography/rad/create_radiograph.so'
+
+lib = ctypes.cdll[filename]
+create_radiograph = lib['grid_index']
+    
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-if len(sys.argv) != 3:
-    if rank == 0:
-        print 'Usage:\n    python create_radiograph.py <simulation_folder> <species>'
-    sys.exit()
+# if len(sys.argv) != 3:
+#     if rank == 0:
+#         print 'Usage:\n    python create_radiograph.py <simulation_folder> <species>'
+#     sys.exit()
 
 # Input parameters
 
@@ -59,35 +69,67 @@ b3_h5f.close()
 
 # Scale B-field
 
-# Weight to a 2d grid
-radiograph = np.zeros_like(radiograph_grid, dtype='double')
+field_grid = np.array([256, 256, 256], dtype='int')
+dx = 2.0
+dt = 1.14
+radiograph_grid = np.array([512, 512], dtype='int')
+radiograph_width = 23284.0
+source_width = 0.0
+n_p = 10000
+u_mag = 0.177707
+rqm = 83811.8
+l_source_plasma = 1667.14
+l_plasma_detector = 66941.6
+plasma_width = 2560.0
 
-# Call c code to loop over number of particles
-#(b1, b2, b3, n_x, n_y, n_z, n_p, radiograph, source_width)
+radiograph = np.zeros(radiograph_grid, dtype='double')
 
-# Reduce 2d grids
+c_double_p = ctypes.POINTER(ctypes.c_double)
+c_int_p = ctypes.POINTER(ctypes.c_int)
+calculate_radiograph(b1.ctypes.data_as(c_double_p),
+                     b2.ctypes.data_as(c_double_p),
+                     b3.ctypes.data_as(c_double_p),
+		     field_grid.ctypes.data_as(d_int_p),
+                     ctypes.c_double(dx),
+                     ctypes.c_double(dt),
+		     radiograph.data_as(c_double_p),
+                     radiograph_grid.data_as(c_int_p),
+                     ctypes.c_double(radiograph_width),
+                     ctypes.c_double(source_width),
+		     ctypes.c_int(n_p),
+                     ctypes.c_double(u_mag),
+                     ctypes.c_double(rqm),
+		     ctypes.c_double(l_source_plasma),
+                     ctypes.c_double(l_plasma_detector),
+                     ctypes.c_double(plasma_width),
+                     ctypes.c_int(rank))
+
 radiograph_total = np.zeros_like(radiograph)
-comm.Reduce([radiograph, MPI.DOUBLE], [radiograph_total, MPI.DOUBLE], op = MPI.SUM, root = 0)
-
-# Save field
+comm.Reduce([radiograph, MPI.DOUBLE], [radiograph_total, MPI.DOUBLE],
+            op = MPI.SUM, root = 0)
 if rank == 0:
-    save_folder = simulation_folder + '/radiography/' + species_save + '/'
-    utilities.ensure_folder_exists(save_folder)
-    filename = save_folder + 'radiography-' + species_save + '-' + str(t).zfill(6) + '.h5'
-    h5f = h5py.File(filename, 'w')
-    h5f.create_dataset('radiograph', data=radiograph_total)
-    h5f.attrs['n_p'] = n_p
-    h5f.attrs['detector_distance'] = detector_distance
-    h5f.attrs['detector_width'] = detector_width
-    time = t_array[t]
-    h5f.attrs['time'] = time
-    if species_save == 'protons_3':
-        h5f.attrs['species'] = spe
-        h5f.attrs['penetration'] = penetration
-    elif species_save == 'protons_147':
-        v0 = 0.174965
-        penetration = v0 * time 
-        h5f.attrs['v0'] = v0
-        h5f.attrs['penetration'] = penetration
-        h5f.close()
+    plt.imshow(field)
+    plt.show()
+
+# # Save field
+# if rank == 0:
+#     save_folder = simulation_folder + '/radiography/' + species_save + '/'
+#     utilities.ensure_folder_exists(save_folder)
+#     filename = save_folder + 'radiography-' + species_save + '-' + str(t).zfill(6) + '.h5'
+#     h5f = h5py.File(filename, 'w')
+#     h5f.create_dataset('radiograph', data=radiograph_total)
+#     h5f.attrs['n_p'] = n_p
+#     h5f.attrs['detector_distance'] = detector_distance
+#     h5f.attrs['detector_width'] = detector_width
+#     time = t_array[t]
+#     h5f.attrs['time'] = time
+#     if species_save == 'protons_3':
+#         h5f.attrs['species'] = spe
+#         h5f.attrs['penetration'] = penetration
+#     elif species_save == 'protons_147':
+#         v0 = 0.174965
+#         penetration = v0 * time 
+#         h5f.attrs['v0'] = v0
+#         h5f.attrs['penetration'] = penetration
+#         h5f.close()
 
