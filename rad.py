@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 filename = '/Users/stotor/Desktop/proton_radiography/rad/create_radiograph.so'
 
 lib = ctypes.cdll[filename]
-create_radiograph = lib['grid_index']
+create_radiograph = lib['create_radiograph']
     
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -52,6 +52,10 @@ size = comm.Get_size()
 ## Radiograph pixel grid
 
 # Load in B-field
+b1_filename = '/Users/stotor/Desktop/proton_radiography/rad/b1-savg-000001.h5'
+b2_filename = '/Users/stotor/Desktop/proton_radiography/rad/b2-savg-000001.h5'
+b3_filename = '/Users/stotor/Desktop/proton_radiography/rad/b3-savg-000001.h5'
+
 b1_h5f = h5py.File(b1_filename, 'r', driver='mpio', comm=comm)
 b2_h5f = h5py.File(b2_filename, 'r', driver='mpio', comm=comm)
 b3_h5f = h5py.File(b3_filename, 'r', driver='mpio', comm=comm)
@@ -60,8 +64,8 @@ b3_h5f = h5py.File(b3_filename, 'r', driver='mpio', comm=comm)
 # exactly what OSIRIS is outputting
 
 b1 = b1_h5f['b1'][:]
-b2 = b1_h5f['b2'][:]
-b3 = b1_h5f['b3'][:]
+b2 = b2_h5f['b2'][:]
+b3 = b3_h5f['b3'][:]
 
 b1_h5f.close()
 b2_h5f.close()
@@ -69,13 +73,13 @@ b3_h5f.close()
 
 # Scale B-field
 
-field_grid = np.array([256, 256, 256], dtype='int')
+field_grid = np.array([256, 256, 256], dtype='int16')
 dx = 2.0
 dt = 1.14
-radiograph_grid = np.array([512, 512], dtype='int')
+radiograph_grid = np.array([512, 512], dtype='int16')
 radiograph_width = 23284.0
 source_width = 0.0
-n_p = 10000
+n_p = 1000
 u_mag = 0.177707
 rqm = 83811.8
 l_source_plasma = 1667.14
@@ -83,32 +87,35 @@ l_plasma_detector = 66941.6
 plasma_width = 2560.0
 
 radiograph = np.zeros(radiograph_grid, dtype='double')
-
+print('Before c')
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
-calculate_radiograph(b1.ctypes.data_as(c_double_p),
-                     b2.ctypes.data_as(c_double_p),
-                     b3.ctypes.data_as(c_double_p),
-		     field_grid.ctypes.data_as(d_int_p),
-                     ctypes.c_double(dx),
-                     ctypes.c_double(dt),
-		     radiograph.data_as(c_double_p),
-                     radiograph_grid.data_as(c_int_p),
-                     ctypes.c_double(radiograph_width),
-                     ctypes.c_double(source_width),
-		     ctypes.c_int(n_p),
-                     ctypes.c_double(u_mag),
-                     ctypes.c_double(rqm),
-		     ctypes.c_double(l_source_plasma),
-                     ctypes.c_double(l_plasma_detector),
-                     ctypes.c_double(plasma_width),
-                     ctypes.c_int(rank))
+
+create_radiograph(b1.ctypes.data_as(c_double_p),
+                  b2.ctypes.data_as(c_double_p),
+                  b3.ctypes.data_as(c_double_p),
+		  field_grid.ctypes.data_as(c_int_p),
+                  ctypes.c_double(dx),
+                  ctypes.c_double(dt),
+		  radiograph.ctypes.data_as(c_double_p),
+                  radiograph_grid.ctypes.data_as(c_int_p),
+                  ctypes.c_double(radiograph_width),
+                  ctypes.c_double(source_width),
+		  ctypes.c_int(n_p),
+                  ctypes.c_double(u_mag),
+                  ctypes.c_double(rqm),
+		  ctypes.c_double(l_source_plasma),
+                  ctypes.c_double(l_plasma_detector),
+                  ctypes.c_double(plasma_width),
+                  ctypes.c_int16(rank))
+print('After c')
 
 radiograph_total = np.zeros_like(radiograph)
 comm.Reduce([radiograph, MPI.DOUBLE], [radiograph_total, MPI.DOUBLE],
             op = MPI.SUM, root = 0)
 if rank == 0:
-    plt.imshow(field)
+    plt.imshow(radiograph)
+    plt.colorbar()
     plt.show()
 
 # # Save field

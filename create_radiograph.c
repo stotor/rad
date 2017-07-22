@@ -1,12 +1,13 @@
 #include "stdlib.h"
 #include "math.h"
+#include "stdio.h"
 
 #define PI (4.0 * atan(1.0))
 #define THETAMAX 0.1
 
 double random_double(void)
 {
-  return rand() / (RAND_MAX + 1.0);
+  return ((double) rand()) / (RAND_MAX + 1.0);
 }
 
 double random_standard_normal(void)
@@ -136,9 +137,9 @@ void advance_momentum(double dt, double dx,
 		      double rqm)
 {
   double b_p[3];
-  interpolate_fields_cic(b1, b2, b3,
-			 field_grid, x, dx, b_p);
-  boris_push(dt, rqm, b_p, u);
+  //  interpolate_fields_cic(b1, b2, b3,
+  //			 field_grid, x, dx, b_p);
+  //boris_push(dt, rqm, b_p, u);
   return;
 }
 
@@ -158,7 +159,7 @@ void propagate(double *b1, double *b2, double *b3, int *field_grid,
 	       double rqm)
 {
   while (x[2] < plasma_width) {
-    advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
+    //    advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
     advance_position(dt, u, x);
   }
   return;
@@ -222,9 +223,9 @@ void deposit_to_detector(double *radiograph, int *radiograph_grid,
   return;
 }
 
-void create_radiograph(double *b1, double *b2, double *b3,
-		       int *field_grid, double dx, double dt,
-		       double *radiograph, int *radiograph_grid,
+void create_radiograph(double *b1, double *b2, double *b3, int *field_grid,
+		       double dx, double dt, double *radiograph,
+		       int *radiograph_grid,
 		       double radiograph_width,
 		       double source_width, int n_p, double u_mag,
 		       double rqm,
@@ -232,15 +233,18 @@ void create_radiograph(double *b1, double *b2, double *b3,
 		       double plasma_width,
 		       int rank)
 {
+  printf("In c");
   srand(rank);
+  printf("Random seeded");
   double x[3], u[3];
   for (int n=0; n<n_p; n++) {
+    printf("%d", n);
     initialize_position(source_width, x);
     initialize_momentum(u_mag, u);
     project_to_plasma(l_source_plasma, x, u);
-    propagate(b1, b2, b3, field_grid, dx, dt, plasma_width, x, u, rqm);
+    //propagate(b1, b2, b3, field_grid, dx, dt, plasma_width, x, u, rqm);
     project_to_detector(plasma_width, l_plasma_detector, x, u);
-    deposit_to_detector(radiograph, radiograph_grid, radiograph_width, x);
+    //    deposit_to_detector(radiograph, radiograph_grid, radiograph_width, x);
   }
   return;
 }
