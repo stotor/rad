@@ -3,7 +3,7 @@
 #include "stdio.h"
 
 #define PI (4.0 * atan(1.0))
-#define THETAMAX 0.1
+#define THETAMAX 0.4
 
 double random_double(void)
 {
@@ -34,14 +34,15 @@ void initialize_momentum(double u_mag, double *u)
   u[0] = u_mag * sin(theta) * cos(phi);
   u[1] = u_mag * sin(theta) * sin(phi);
   u[2] = u_mag * cos(theta);
+  printf("%f, %f, %f\n", u[0], u[1], u[2]);
   return;
 }
 
 
 void project_to_plasma(double l_source_plasma, double *x, double *u)
 {
-  x[0] = l_source_plasma * u[0] / u[2];
-  x[1] = l_source_plasma * u[1] / u[2];
+  x[0] = x[0] + l_source_plasma * u[0] / u[2];
+  x[1] = x[1] + l_source_plasma * u[1] / u[2];
   return;
 }
 
@@ -137,9 +138,9 @@ void advance_momentum(double dt, double dx,
 		      double rqm)
 {
   double b_p[3];
-  //  interpolate_fields_cic(b1, b2, b3,
-  //			 field_grid, x, dx, b_p);
-  //boris_push(dt, rqm, b_p, u);
+  interpolate_fields_cic(b1, b2, b3,
+  			 field_grid, x, dx, b_p);
+  boris_push(dt, rqm, b_p, u);
   return;
 }
 
@@ -159,7 +160,7 @@ void propagate(double *b1, double *b2, double *b3, int *field_grid,
 	       double rqm)
 {
   while (x[2] < plasma_width) {
-    //    advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
+    //advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
     advance_position(dt, u, x);
   }
   return;
@@ -170,8 +171,8 @@ void project_to_detector(double plasma_width, double l_plasma_detector,
 {
   double distance_to_detector;
   distance_to_detector = l_plasma_detector - (x[2] - plasma_width);
-  x[0] = (distance_to_detector) * u[0] / u[2];
-  x[1] = (distance_to_detector) * u[1] / u[2];
+  x[0] = x[0] + (distance_to_detector) * u[0] / u[2];
+  x[1] = x[1] + (distance_to_detector) * u[1] / u[2];
   return;
 }
 
@@ -181,8 +182,8 @@ void deposit_particle_2d_cic(double *field, int *field_grid,
   int i_ll, j_ll;
   double dx1, dx2, w_x1[2], w_x2[2];
   
-  x1_dx = x1_dx - 0.5;
-  x2_dx = x2_dx - 0.5;
+  //  x1_dx = x1_dx - 0.5;
+  //  x2_dx = x2_dx - 0.5;
     
   i_ll = floor(x1_dx);
   j_ll = floor(x2_dx);
@@ -199,7 +200,11 @@ void deposit_particle_2d_cic(double *field, int *field_grid,
   int index;
   for (int j=0; j<2; j++) {
     for (int i=0; i<2; i++) {
-      index = (j_ll + j) * field_grid[0] * (i_ll + i);
+      index = (j_ll + j) * field_grid[0] + (i_ll + i);
+      if (index >= 512*512)
+	{
+	  continue;
+	}
       field[index] += charge * w_x1[i] * w_x2[j];
     }
   }
@@ -212,13 +217,16 @@ void deposit_to_detector(double *radiograph, int *radiograph_grid,
 			 double *x)
 {
   double charge, dx, half_width, x1_dx, x2_dx;
+
   charge = 1.0;
   dx = radiograph_width / ((double) radiograph_grid[0]);
+
   half_width = radiograph_width / 2.0;
   if (fabs(x[0]) > half_width || fabs(x[1]) > half_width)
     return;
   x1_dx = (x[0] - (-1.0 * half_width)) / dx;
   x2_dx = (x[1] - (-1.0 * half_width)) / dx;
+
   deposit_particle_2d_cic(radiograph, radiograph_grid, charge, x1_dx, x2_dx);
   return;
 }
@@ -233,18 +241,15 @@ void create_radiograph(double *b1, double *b2, double *b3, int *field_grid,
 		       double plasma_width,
 		       int rank)
 {
-  printf("In c");
   srand(rank);
-  printf("Random seeded");
   double x[3], u[3];
   for (int n=0; n<n_p; n++) {
-    printf("%d", n);
     initialize_position(source_width, x);
     initialize_momentum(u_mag, u);
     project_to_plasma(l_source_plasma, x, u);
-    //propagate(b1, b2, b3, field_grid, dx, dt, plasma_width, x, u, rqm);
+    propagate(b1, b2, b3, field_grid, dx, dt, plasma_width, x, u, rqm);
     project_to_detector(plasma_width, l_plasma_detector, x, u);
-    //    deposit_to_detector(radiograph, radiograph_grid, radiograph_width, x);
+    deposit_to_detector(radiograph, radiograph_grid, radiograph_width, x);
   }
   return;
 }

@@ -73,13 +73,13 @@ b3_h5f.close()
 
 # Scale B-field
 
-field_grid = np.array([256, 256, 256], dtype='int16')
+field_grid = np.array([256, 256, 256], dtype='int')
 dx = 2.0
 dt = 1.14
-radiograph_grid = np.array([512, 512], dtype='int16')
+radiograph_grid = np.array([512, 512], dtype='int')
 radiograph_width = 23284.0
 source_width = 0.0
-n_p = 1000
+n_p = 100000
 u_mag = 0.177707
 rqm = 83811.8
 l_source_plasma = 1667.14
@@ -107,14 +107,14 @@ create_radiograph(b1.ctypes.data_as(c_double_p),
 		  ctypes.c_double(l_source_plasma),
                   ctypes.c_double(l_plasma_detector),
                   ctypes.c_double(plasma_width),
-                  ctypes.c_int16(rank))
+                  ctypes.c_int(rank))
 print('After c')
 
 radiograph_total = np.zeros_like(radiograph)
 comm.Reduce([radiograph, MPI.DOUBLE], [radiograph_total, MPI.DOUBLE],
             op = MPI.SUM, root = 0)
 if rank == 0:
-    plt.imshow(radiograph)
+    plt.imshow(np.log(radiograph))
     plt.colorbar()
     plt.show()
 
