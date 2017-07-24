@@ -3,7 +3,7 @@
 #include "stdio.h"
 
 #define PI (4.0 * atan(1.0))
-#define THETAMAX 0.4
+#define THETAMAX 0.15
 
 double random_double(void)
 {
@@ -18,6 +18,17 @@ double random_standard_normal(void)
   return sqrt(-2.0 * log(r1)) * cos(2.0 * PI * r2);
 }
 
+void random_spherical_angles(double *theta, double *phi)
+{
+  double x, y, z;
+  x = random_standard_normal();
+  y = random_standard_normal();
+  z = random_standard_normal();
+  *theta = atan2(sqrt(x * x + y * y), z);
+  *phi = atan2(y, x);
+  return;
+}
+
 void initialize_position(double source_width, double *x)
 {
   x[0] = source_width * random_standard_normal();
@@ -29,12 +40,13 @@ void initialize_position(double source_width, double *x)
 void initialize_momentum(double u_mag, double *u)
 {
   double theta, phi;
-  theta = PI * random_double() * THETAMAX;
-  phi = 2.0 * PI * random_double();
+  do
+    {
+      random_spherical_angles(&theta, &phi);
+    } while (theta > THETAMAX);
   u[0] = u_mag * sin(theta) * cos(phi);
   u[1] = u_mag * sin(theta) * sin(phi);
   u[2] = u_mag * cos(theta);
-  printf("%f, %f, %f\n", u[0], u[1], u[2]);
   return;
 }
 
@@ -95,14 +107,13 @@ void interpolate_fields_cic(double *b1, double *b2, double *b3,
 {
   double delta_x, delta_y, delta_z, wx[2], wy[2], wz[2];
   int i_lower, j_lower, k_lower, grid_index_current;
-
   i_lower = floor(x[0] / dx);
   j_lower = floor(x[1] / dx);
   k_lower = floor(x[2] / dx);
 
-  delta_x = x[0] - (i_lower + 0.5);
-  delta_y = x[1] - (j_lower + 0.5);
-  delta_z = x[2] - (k_lower + 0.5);
+  delta_x = x[0] / dx - (i_lower + 0.5);
+  delta_y = x[1] / dx - (j_lower + 0.5);
+  delta_z = x[2] / dx - (k_lower + 0.5);
 
   wx[0] = 0.5 - delta_x;
   wx[1] = 0.5 + delta_x;
@@ -113,9 +124,9 @@ void interpolate_fields_cic(double *b1, double *b2, double *b3,
   wz[0] = 0.5 - delta_z;
   wz[1] = 0.5 + delta_z;
   
-  b_p[0] = 0;
-  b_p[1] = 0;
-  b_p[2] = 0;
+  b_p[0] = 0.0;
+  b_p[1] = 0.0;
+  b_p[2] = 0.0;
   for (int k=0; k<2; k++) {
     for (int j=0; j<2; j++) {
       for (int i=0; i<2; i++) {
@@ -123,7 +134,7 @@ void interpolate_fields_cic(double *b1, double *b2, double *b3,
 	  grid_index(field_grid[2], field_grid[1], field_grid[0],
 		     k_lower+k, j_lower+j, i_lower+i);
 	b_p[0] += b1[grid_index_current] * wz[k] * wy[j] * wx[i];
-	b_p[1] += b2[grid_index_current] * wz[k] * wy[j] * wx[i];
+       	b_p[1] += b2[grid_index_current] * wz[k] * wy[j] * wx[i];
 	b_p[2] += b3[grid_index_current] * wz[k] * wy[j] * wx[i];
       }
     }
@@ -138,8 +149,7 @@ void advance_momentum(double dt, double dx,
 		      double rqm)
 {
   double b_p[3];
-  interpolate_fields_cic(b1, b2, b3,
-  			 field_grid, x, dx, b_p);
+  interpolate_fields_cic(b1, b2, b3, field_grid, x, dx, b_p);
   boris_push(dt, rqm, b_p, u);
   return;
 }
@@ -160,7 +170,7 @@ void propagate(double *b1, double *b2, double *b3, int *field_grid,
 	       double rqm)
 {
   while (x[2] < plasma_width) {
-    //advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
+    advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
     advance_position(dt, u, x);
   }
   return;
@@ -244,6 +254,7 @@ void create_radiograph(double *b1, double *b2, double *b3, int *field_grid,
   srand(rank);
   double x[3], u[3];
   for (int n=0; n<n_p; n++) {
+    printf("%f \n", (double) n / n_p);
     initialize_position(source_width, x);
     initialize_momentum(u_mag, u);
     project_to_plasma(l_source_plasma, x, u);
