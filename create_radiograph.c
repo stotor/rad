@@ -106,7 +106,7 @@ void interpolate_fields_cic(double *b1, double *b2, double *b3,
 			    double *b_p)
 {
   double delta_x, delta_y, delta_z, wx[2], wy[2], wz[2];
-  int i_lower, j_lower, k_lower, grid_index_current;
+  int i_lower, j_lower, k_lower, k, j, i, grid_index_current;
   i_lower = floor(x[0] / dx);
   j_lower = floor(x[1] / dx);
   k_lower = floor(x[2] / dx);
@@ -127,9 +127,9 @@ void interpolate_fields_cic(double *b1, double *b2, double *b3,
   b_p[0] = 0.0;
   b_p[1] = 0.0;
   b_p[2] = 0.0;
-  for (int k=0; k<2; k++) {
-    for (int j=0; j<2; j++) {
-      for (int i=0; i<2; i++) {
+  for (k=0; k<2; k++) {
+    for (j=0; j<2; j++) {
+      for (i=0; i<2; i++) {
 	grid_index_current =
 	  grid_index(field_grid[2], field_grid[1], field_grid[0],
 		     k_lower+k, j_lower+j, i_lower+i);
@@ -248,9 +248,10 @@ void create_radiograph(double *b1, double *b2, double *b3, int *field_grid,
 		       double plasma_width,
 		       int rank)
 {
-  srand(rank);
   double x[3], u[3];
-  for (int n=0; n < n_p; n++) {
+  int n;
+  srand(rank);
+  for (n=0; n < n_p; n++) {
     if (rank==0)
       printf("%f \n", (double) n / n_p);
     initialize_position(source_width, x);
