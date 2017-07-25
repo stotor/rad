@@ -3,7 +3,6 @@
 #include "stdio.h"
 
 #define PI (4.0 * atan(1.0))
-#define THETAMAX 0.15
 
 double random_double(void)
 {
@@ -33,17 +32,17 @@ void initialize_position(double source_width, double *x)
 {
   x[0] = source_width * random_standard_normal();
   x[1] = source_width * random_standard_normal();
-  x[2] = 0.0;
+  x[2] = source_width * random_standard_normal();
   return;
 }
 
-void initialize_momentum(double u_mag, double *u)
+void initialize_momentum(double u_mag, double *u, double theta_max)
 {
   double theta, phi;
   do
     {
       random_spherical_angles(&theta, &phi);
-    } while (theta > THETAMAX);
+    } while (theta > theta_max);
   u[0] = u_mag * sin(theta) * cos(phi);
   u[1] = u_mag * sin(theta) * sin(phi);
   u[2] = u_mag * cos(theta);
@@ -53,8 +52,9 @@ void initialize_momentum(double u_mag, double *u)
 
 void project_to_plasma(double l_source_plasma, double *x, double *u)
 {
-  x[0] = x[0] + l_source_plasma * u[0] / u[2];
-  x[1] = x[1] + l_source_plasma * u[1] / u[2];
+  x[0] = x[0] + (l_source_plasma - x[2]) * u[0] / u[2];
+  x[1] = x[1] + (l_source_plasma - x[2]) * u[1] / u[2];
+  x[2] = 0.0;
   return;
 }
 
@@ -173,6 +173,8 @@ void propagate(double *b1, double *b2, double *b3, int *field_grid,
     advance_momentum(dt, dx, field_grid, b1, b2, b3, x, u, rqm);
     advance_position(dt, u, x);
   }
+  // Half timestep push is necessary to have x and u defined at same time
+  advance_momentum((dt/2.0), dx, field_grid, b1, b2, b3, x, u, rqm);
   return;
 }
 
@@ -186,41 +188,36 @@ void project_to_detector(double plasma_width, double l_plasma_detector,
   return;
 }
 
-void deposit_particle_2d_cic(double *field, int *field_grid,
-			     double charge, double x1_dx, double x2_dx)
+void deposit_particle_2d_ngp(double *field, int *field_grid, double charge,
+			     double x1_dx, double x2_dx)
 {
-  int i_ll, j_ll;
-  double dx1, dx2, w_x1[2], w_x2[2];
-  
-  //  x1_dx = x1_dx - 0.5;
-  //  x2_dx = x2_dx - 0.5;
-    
+  int i_ll, j_ll, i_ngp, j_ngp, index;
+
+  x1_dx = x1_dx - 0.5;
+  x2_dx = x2_dx - 0.5;
+
   i_ll = floor(x1_dx);
   j_ll = floor(x2_dx);
 
-  dx1 = x1_dx - (i_ll + 0.5);
-  dx2 = x2_dx - (j_ll + 0.5);
-
-  w_x1[0] = 0.5 - dx1;
-  w_x1[1] = 0.5 + dx2;
-
-  w_x2[0] = 0.5 - dx1;
-  w_x2[1] = 0.5 + dx2;
-
-  int index;
-  for (int j=0; j<2; j++) {
-    for (int i=0; i<2; i++) {
-      index = (j_ll + j) * field_grid[0] + (i_ll + i);
-      if (index >= 512*512)
-	{
-	  continue;
-	}
-      field[index] += charge * w_x1[i] * w_x2[j];
-    }
+  if ((x1_dx-i_ll)<0.5) {
+    i_ngp = i_ll;
   }
+  else {
+    i_ngp = i_ll+1;
+  }
+  
+  if ((x2_dx-j_ll)<0.5) {
+    j_ngp = j_ll;
+  }
+  else {
+    j_ngp = j_ll+1;
+  }
+  
+  index = j_ngp * field_grid[1] + i_ngp;  
+  field[index] += charge;
+    
   return;
 }
-
 
 void deposit_to_detector(double *radiograph, int *radiograph_grid,
 			 double radiograph_width,
@@ -232,12 +229,12 @@ void deposit_to_detector(double *radiograph, int *radiograph_grid,
   dx = radiograph_width / ((double) radiograph_grid[0]);
 
   half_width = radiograph_width / 2.0;
-  if (fabs(x[0]) > half_width || fabs(x[1]) > half_width)
+  if (fabs(x[0]) >= half_width || fabs(x[1]) >= half_width)
     return;
   x1_dx = (x[0] - (-1.0 * half_width)) / dx;
   x2_dx = (x[1] - (-1.0 * half_width)) / dx;
 
-  deposit_particle_2d_cic(radiograph, radiograph_grid, charge, x1_dx, x2_dx);
+  deposit_particle_2d_ngp(radiograph, radiograph_grid, charge, x1_dx, x2_dx);
   return;
 }
 
@@ -245,18 +242,19 @@ void create_radiograph(double *b1, double *b2, double *b3, int *field_grid,
 		       double dx, double dt, double *radiograph,
 		       int *radiograph_grid,
 		       double radiograph_width,
-		       double source_width, int n_p, double u_mag,
-		       double rqm,
+		       double source_width, double theta_max, int n_p,
+		       double u_mag, double rqm,
 		       double l_source_plasma, double l_plasma_detector,
 		       double plasma_width,
 		       int rank)
 {
   srand(rank);
   double x[3], u[3];
-  for (int n=0; n<n_p; n++) {
-    printf("%f \n", (double) n / n_p);
+  for (int n=0; n < n_p; n++) {
+    if (rank==0)
+      printf("%f \n", (double) n / n_p);
     initialize_position(source_width, x);
-    initialize_momentum(u_mag, u);
+    initialize_momentum(u_mag, u, theta_max);
     project_to_plasma(l_source_plasma, x, u);
     propagate(b1, b2, b3, field_grid, dx, dt, plasma_width, x, u, rqm);
     project_to_detector(plasma_width, l_plasma_detector, x, u);
