@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import ctypes
 import h5py
@@ -5,11 +7,17 @@ from mpi4py import MPI
 
 import utilities
 
-library_filename = '/Users/stotor/Desktop/proton_radiography/rad/create_radiograph.so'
-lib = ctypes.cdll[library_filename]
+library_folder = os.path.dirname(os.path.realpath(__file__))
+lib = ctypes.cdll[library_folder + '/create_radiograph.so']
 create_radiograph = lib['create_radiograph']
 
-def create_radiograph(params):
+def shift_field(field, shift, axis):
+    w1 = 1.0 - shift
+    w2 = shift
+    field = field * w1 + np.roll(field, -1, axis=axis) * w2
+    return field
+
+def rad(params):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -22,16 +30,16 @@ def create_radiograph(params):
     # Proton source properties
     u_mag = params['u_mag']
     rqm = params['rqm']
-    proton_field = params['proton_yield']
+    proton_yield = params['proton_yield']
     # Simulation plasma properties
     dx = params['dx']
     dt = params['dt']
-    mi_mezsim = params['mi_mez_sim']
+    mi_mez_sim = params['mi_mez_sim']
     b1_filename = params['b1_filename']
     b2_filename = params['b2_filename']
     b3_filename = params['b3_filename']
     # Physical plasma properties
-    mi_mex_exp = params['mi_mez_exp']
+    mi_mez_exp = params['mi_mez_exp']
     v_sim = params['v_sim']
     v_exp = params['v_exp']
     # n_e in units of cm^-3
@@ -63,7 +71,6 @@ def create_radiograph(params):
     b2_h5f = h5py.File(b2_filename, 'r', driver='mpio', comm=comm)
     b3_h5f = h5py.File(b3_filename, 'r', driver='mpio', comm=comm)
     time = b1_h5f.attrs['TIME'][0]
-    # Need to implement shifting to deal with Yee lattice and spatial averaging
     b1 = np.array(b1_h5f['b1'][:], copy=True).astype('double')
     b2 = np.array(b2_h5f['b2'][:], copy=True).astype('double')
     b3 = np.array(b3_h5f['b3'][:], copy=True).astype('double')
@@ -74,7 +81,14 @@ def create_radiograph(params):
     b1 = b1 * field_scaling
     b2 = b2 * field_scaling
     b3 = b3 * field_scaling
-
+    # Need to make this general, currently is for the Weibel savg fields
+    dx_original = 0.5
+    dx_new = 2.0
+    shift = (dx_original / 2.0) / dx_new
+    b1 = shift_field(b1, shift, axis=2)
+    b2 = shift_field(b2, shift, axis=1)
+    b3 = shift_field(b3, shift, axis=0)
+    
     radiograph_grid = np.array(radiograph_grid, 'intc')
     radiograph = np.zeros(radiograph_grid, dtype='double')
     field_grid = np.array(b1.shape, 'intc')
@@ -106,7 +120,7 @@ def create_radiograph(params):
                 op = MPI.SUM, root = 0)
 
     if rank == 0:
-        utilities.ensure_folder_exists(save_folder):
+        utilities.ensure_folder_exists(save_folder)
         save_filename = save_folder + '/radiograph-' + str(t).zfill(6) + '.h5'
         h5f = h5py.File(save_filename, 'w')
         h5f.create_dataset('radiograph', data=radiograph_total)
