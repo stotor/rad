@@ -9,9 +9,7 @@ import osiris_interface as oi
 import pic_calculations as pic
 import utilities
 
-import matplotlib.pyplot as plt
-
-library_filename = '/Users/stotor/Desktop/proton_radiography/rad/create_radiograph.so'
+library_filename = '/u/eot/totorica/rad/create_radiograph.so'
 
 lib = ctypes.cdll[library_filename]
 create_radiograph = lib['create_radiograph']
@@ -22,7 +20,7 @@ size = comm.Get_size()
 
 ###################################
 # Input parameters
-save_filename = '/Users/stotor/Desktop/radiograph-1.h5'
+save_filename = '/u/eot/totorica/scratch/OMEGA_radiograph_10mm/t_1_rad_test/radiograph-1.h5'
 # Proton source properties
 u_mag = 0.177707
 rqm = 1836.0
@@ -31,9 +29,9 @@ n_p = 174467
 dx = 2.0
 dt = 1.14
 mi_mez_sim = 128.0
-b1_filename = '/Users/stotor/Desktop/proton_radiography/rad/b1-savg-000001.h5'
-b2_filename = '/Users/stotor/Desktop/proton_radiography/rad/b2-savg-000001.h5'
-b3_filename = '/Users/stotor/Desktop/proton_radiography/rad/b3-savg-000001.h5'
+b1_filename = '/u/eot/totorica/scratch/OMEGA_radiograph_10mm/t_1_rad_test/b1-savg-000001.h5'
+b2_filename = '/u/eot/totorica/scratch/OMEGA_radiograph_10mm/t_1_rad_test/b2-savg-000001.h5'
+b3_filename = '/u/eot/totorica/scratch/OMEGA_radiograph_10mm/t_1_rad_test/b3-savg-000001.h5'
 # Physical plasma properties
 mi_mez_exp = 2.0 * 1836.0
 v_sim = 0.815
@@ -41,7 +39,7 @@ v_exp = 1.0 / 300.0
 # n_e in units of cm^-3
 n_e = 4.4 * 10.0**19
 # All length scales in units of m
-source_width = 19.11 * 10**-6
+source_width = 0.0
 l_source_detector = 300.0 * 10**-3
 l_source_midpoint = 10.0 * 10**-3
 plasma_width = 5.0 * 10**-3
@@ -104,10 +102,10 @@ radiograph_total = np.zeros_like(radiograph)
 comm.Reduce([radiograph, MPI.DOUBLE], [radiograph_total, MPI.DOUBLE],
             op = MPI.SUM, root = 0)
 
-if rank == 0:
-    plt.imshow(radiograph, cmap='gnuplot2')
-    plt.colorbar()
-    plt.show()
+# if rank == 0:
+#     plt.imshow(radiograph, cmap='gnuplot2')
+#     plt.colorbar()
+#     plt.show()
 
 if rank == 0:
     h5f = h5py.File(save_filename, 'w')
