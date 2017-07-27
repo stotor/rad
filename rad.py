@@ -132,9 +132,9 @@ def rad(params):
         h5f.create_dataset('radiograph', data=radiograph_total)
         h5f.attrs['u_mag'] = u_mag
         h5f.attrs['di_m'] = di
-        h5f.attrs['plasma_width_m'] = plasma_width
-        h5f.attrs['source_width_m'] = source_width
-        h5f.attrs['radiograph_width_m'] = radiograph_width
+        h5f.attrs['plasma_width_m'] = plasma_width * di / np.sqrt(128.0)
+        h5f.attrs['source_width_m'] = source_width * di / np.sqrt(128.0)
+        h5f.attrs['radiograph_width_m'] = radiograph_width * di / np.sqrt(128.0)
         h5f.attrs['l_source_detector_m'] = l_source_detector
         h5f.attrs['l_source_midpoint_m'] = l_source_midpoint
         h5f.attrs['magnification'] = l_source_detector / l_source_midpoint
