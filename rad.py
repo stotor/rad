@@ -11,6 +11,12 @@ library_folder = os.path.dirname(os.path.realpath(__file__))
 lib = ctypes.cdll[library_folder + '/create_radiograph.so']
 create_radiograph = lib['create_radiograph']
 
+def t_wpe_to_ns(t_wpe, mi_mez_sim, mi_mez_exp, v_sim, v_exp, n_e):
+    t_wpi = t_wpe / np.sqrt(mi_mez_sim)
+    wpi = 1.32 * 10.0**3 * np.sqrt(n_e) / np.sqrt(mi_mez_exp / 1836.0)
+    t_ns = (t_wpi / wpi) * (v_sim / v_exp)
+    return t_ns
+
 def shift_field(field, shift, axis):
     w1 = 1.0 - shift
     w2 = shift
@@ -128,10 +134,11 @@ def rad(params):
         h5f.attrs['di_m'] = di
         h5f.attrs['plasma_width_m'] = plasma_width
         h5f.attrs['source_width_m'] = source_width
-        h5f.attrs['radiograph_width_m'] = source_width
+        h5f.attrs['radiograph_width_m'] = radiograph_width
         h5f.attrs['l_source_detector_m'] = l_source_detector
         h5f.attrs['l_source_midpoint_m'] = l_source_midpoint
         h5f.attrs['magnification'] = l_source_detector / l_source_midpoint
         h5f.attrs['time_wpe'] = time
+        h5f.attrs['time_ns'] = t_wpe_to_ns(time, mi_mez_sim, mi_mez_exp, v_sim, v_exp, n_e)
         h5f.attrs['field_scaling'] = field_scaling
         h5f.close()
